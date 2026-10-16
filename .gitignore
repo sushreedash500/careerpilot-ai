@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Next.js
+.next/
+out/
+build/
+
+# Environment Variables
+.env
+.env.local
+.env*.local
+
+# Vercel
+.vercel/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
