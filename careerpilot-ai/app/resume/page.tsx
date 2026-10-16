@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCareer } from "@/components/CareerContext";
 import {
   FileText,
@@ -24,7 +25,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-export default function ResumePage() {
+function ResumePageContent() {
+  const searchParams = useSearchParams();
   const { resumeData, setResumeData, loadDemoProfile, isLoadingDemo, apiFetch } = useCareer();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -32,6 +34,17 @@ export default function ResumePage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [activeTab, setActiveTab] = useState<"upload" | "report">("upload");
+
+  // If user navigates via "Analyze Your Resume" (?upload=true) or if no report loaded, default to upload card
+  useEffect(() => {
+    const isUploadRequested = searchParams.get("upload") === "true";
+    if (isUploadRequested || !resumeData) {
+      setActiveTab("upload");
+    } else {
+      setActiveTab("report");
+    }
+  }, [searchParams, resumeData]);
 
   const handleFile = (file: File) => {
     setErrorMessage("");
@@ -44,6 +57,7 @@ export default function ResumePage() {
       return;
     }
     setSelectedFile(file);
+    setActiveTab("upload");
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -59,7 +73,7 @@ export default function ResumePage() {
 
     setIsUploading(true);
     setErrorMessage("");
-    setUploadStep("Extracting text with PyMuPDF...");
+    setUploadStep("Extracting text with PDF engine...");
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -80,12 +94,18 @@ export default function ResumePage() {
 
       const data = await res.json();
       setResumeData(data);
+      setActiveTab("report");
     } catch (err: any) {
       setErrorMessage(err.message || "An error occurred during analysis.");
     } finally {
       setIsUploading(false);
       setUploadStep("");
     }
+  };
+
+  const handleDemoClick = async () => {
+    await loadDemoProfile();
+    setActiveTab("report");
   };
 
   const copyToClipboard = (text: string, index: number) => {
@@ -121,7 +141,7 @@ export default function ResumePage() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={loadDemoProfile}
+              onClick={handleDemoClick}
               disabled={isLoadingDemo || isUploading}
               className="flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-slate-900 px-4 py-2 text-xs font-semibold text-cyan-300 transition-all hover:bg-slate-800 disabled:opacity-50"
             >
@@ -132,21 +152,82 @@ export default function ResumePage() {
             {resumeData && (
               <button
                 onClick={() => {
-                  setResumeData(null);
+                  setActiveTab("upload");
                   setSelectedFile(null);
                 }}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 hover:text-white"
+                className="flex items-center gap-1.5 rounded-xl border border-cyan-500/40 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-cyan-300 hover:border-cyan-400 hover:text-white"
               >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Upload New
+                <UploadCloud className="h-3.5 w-3.5" />
+                Upload Your Resume
               </button>
             )}
           </div>
         </div>
 
-        {/* Upload Card (shown if no resume analyzed yet) */}
-        {!resumeData && (
+        {/* View Switcher Tabs (shown if resumeData is loaded) */}
+        {resumeData && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab("upload")}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
+                  activeTab === "upload"
+                    ? "bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <UploadCloud className="h-4 w-4" />
+                <span>Upload & Analyze Your Resume</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab("report")}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
+                  activeTab === "report"
+                    ? "bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <FileText className="h-4 w-4" />
+                <span>Analysis Report: {resumeData.contact_info?.name || "Active"}</span>
+                <span
+                  className={`ml-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    activeTab === "report"
+                      ? "bg-slate-950/30 text-slate-950"
+                      : "bg-cyan-950 text-cyan-400 border border-cyan-800/40"
+                  }`}
+                >
+                  ATS {resumeData.ats_score}
+                </span>
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-400 pr-2">
+              Current File: <span className="font-semibold text-white">{resumeData.filename}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Upload Card (shown when activeTab === "upload" or when no resume analyzed yet) */}
+        {(!resumeData || activeTab === "upload") && (
           <div className="mx-auto max-w-2xl">
+            {resumeData && (
+              <div className="mb-4 flex items-center justify-between rounded-xl border border-cyan-500/30 bg-cyan-950/30 px-4 py-3 text-xs text-cyan-300">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-cyan-400 shrink-0" />
+                  <span>
+                    Currently viewing analysis for: <strong>{resumeData.contact_info?.name || resumeData.filename}</strong> (ATS {resumeData.ats_score}). Select your PDF below to analyze your own resume!
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveTab("report")}
+                  className="rounded-lg bg-cyan-500/20 px-2.5 py-1 text-xs font-bold text-cyan-300 hover:bg-cyan-500/30 shrink-0 ml-2"
+                >
+                  View Report →
+                </button>
+              </div>
+            )}
+
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -169,7 +250,7 @@ export default function ResumePage() {
               </h2>
 
               <p className="mt-2 text-xs text-slate-400">
-                Supports PyMuPDF text extraction · Maximum file size 10 MB
+                Supports PyMuPDF & PDF.js text extraction · Maximum file size 10 MB
               </p>
 
               <div className="mt-6 flex flex-wrap justify-center gap-3">
@@ -185,7 +266,7 @@ export default function ResumePage() {
 
                 <button
                   type="button"
-                  onClick={loadDemoProfile}
+                  onClick={handleDemoClick}
                   disabled={isLoadingDemo}
                   className="rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 text-xs font-semibold text-slate-200 transition hover:bg-slate-700"
                 >
@@ -230,8 +311,8 @@ export default function ResumePage() {
           </div>
         )}
 
-        {/* Results Dashboard (shown when resumeData is loaded) */}
-        {resumeData && (
+        {/* Results Dashboard (shown when resumeData is loaded and activeTab is report) */}
+        {resumeData && activeTab === "report" && (
           <div className="space-y-8">
             {/* Candidate Identity & Summary Banner */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 backdrop-blur-md sm:p-8">
@@ -263,216 +344,176 @@ export default function ResumePage() {
                         <span>{resumeData.contact_info.phone}</span>
                       </div>
                     )}
-                    {resumeData.contact_info?.linkedin && (
-                      <div className="flex items-center gap-1.5 text-cyan-300 hover:underline">
-                        <svg className="h-3.5 w-3.5 fill-current text-cyan-400" viewBox="0 0 24 24">
-                          <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
-                        </svg>
-                        <span>{resumeData.contact_info.linkedin}</span>
-                      </div>
-                    )}
-                    {resumeData.contact_info?.github && (
-                      <div className="flex items-center gap-1.5 text-cyan-300 hover:underline">
-                        <svg className="h-3.5 w-3.5 fill-current text-cyan-400" viewBox="0 0 24 24">
-                          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-                        </svg>
-                        <span>{resumeData.contact_info.github}</span>
-                      </div>
-                    )}
-                    {resumeData.contact_info?.portfolio && (
-                      <div className="flex items-center gap-1.5 text-cyan-300 hover:underline">
+                    {resumeData.contact_info?.location && (
+                      <div className="flex items-center gap-1.5">
                         <Globe className="h-3.5 w-3.5 text-cyan-400" />
-                        <span>{resumeData.contact_info.portfolio}</span>
+                        <span>{resumeData.contact_info.location}</span>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Score Radial Badge */}
-                <div className={`flex flex-col items-center justify-center rounded-2xl border px-6 py-4 shadow-inner ${getScoreColor(resumeData.ats_score)}`}>
-                  <span className="text-3xl font-black">{resumeData.ats_score}</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider">
-                    Overall ATS Score
-                  </span>
-                  <span className="mt-1 text-[11px] font-medium opacity-90">
-                    {resumeData.ats_score >= 80
-                      ? "🏆 Top 10% ATS Ready"
-                      : resumeData.ats_score >= 65
-                      ? "👍 Competitive Profile"
-                      : "⚠️ Needs Optimization"}
-                  </span>
+                {/* ATS Overall Score Ring / Badge */}
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                      Overall ATS Readiness
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Weighted recruiter score
+                    </div>
+                  </div>
+                  <div
+                    className={`flex h-20 w-20 flex-col items-center justify-center rounded-2xl border-2 font-black shadow-lg ${getScoreColor(
+                      resumeData.ats_score
+                    )}`}
+                  >
+                    <span className="text-3xl leading-none">{resumeData.ats_score}</span>
+                    <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">/100</span>
+                  </div>
                 </div>
               </div>
-
-              {resumeData.summary_critique && (
-                <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs text-slate-300">
-                  <span className="font-bold text-cyan-400">Recruiter Verdict: </span>
-                  {resumeData.summary_critique}
-                </div>
-              )}
             </div>
 
-            {/* 4 Category Score Breakdown Grid */}
+            {/* Score Breakdown (4 Vectors) */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {resumeData.score_breakdown.map((cat, idx) => (
+              {resumeData.score_breakdown.map((item, idx) => (
                 <div
                   key={idx}
-                  className="flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-5 backdrop-blur-sm"
+                  className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-5 backdrop-blur-sm transition hover:border-slate-700"
                 >
                   <div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-300">{cat.category}</span>
-                      <span className="text-sm font-black text-cyan-400">{cat.score}%</span>
+                      <span className="text-xs font-semibold text-slate-400">
+                        {item.category}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                          item.status === "excellent"
+                            ? "bg-emerald-950 text-emerald-400 border border-emerald-800/40"
+                            : item.status === "good"
+                            ? "bg-cyan-950 text-cyan-400 border border-cyan-800/40"
+                            : "bg-amber-950 text-amber-400 border border-amber-800/40"
+                        }`}
+                      >
+                        {item.score}%
+                      </span>
                     </div>
 
                     {/* Progress Bar */}
-                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          cat.score >= 80
+                        className={`h-full transition-all duration-500 ${
+                          item.score >= 80
                             ? "bg-emerald-400"
-                            : cat.score >= 60
+                            : item.score >= 60
                             ? "bg-cyan-400"
                             : "bg-amber-400"
                         }`}
-                        style={{ width: `${cat.score}%` }}
+                        style={{ width: `${item.score}%` }}
                       />
                     </div>
-                  </div>
 
-                  <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
-                    {cat.feedback}
-                  </p>
+                    <p className="mt-3 text-xs leading-relaxed text-slate-300">
+                      {item.feedback}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
 
-            {/* STAR-Method Bullet Point Rewriter */}
-            <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-6 sm:p-8">
-              <div className="flex items-center justify-between">
+            {/* STAR Method Bullet Rewrites */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 backdrop-blur-md sm:p-8">
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-400 uppercase tracking-widest">
                     <Sparkles className="h-3.5 w-3.5" />
-                    <span>STAR Method Optimizer</span>
+                    <span>STAR Method Transformations</span>
                   </div>
                   <h3 className="mt-1 text-xl font-bold">
-                    Actionable Bullet Point Upgrades
+                    Automated Bullet Point Upgrades
                   </h3>
-                  <p className="text-xs text-slate-400">
-                    Replace passive, generic descriptions with quantifiable, result-driven STAR bullets.
+                  <p className="mt-1 text-xs text-slate-400">
+                    Transform weak or passive bullets into high-impact, quantified engineering achievements.
                   </p>
                 </div>
-                <span className="hidden rounded-full bg-cyan-950 px-3 py-1 text-xs font-medium text-cyan-300 sm:inline-block">
-                  Situation · Task · Action · Result
-                </span>
               </div>
 
-              <div className="mt-6 space-y-4">
+              <div className="space-y-6">
                 {resumeData.bullet_improvements.map((bullet, idx) => (
                   <div
                     key={idx}
-                    className="rounded-xl border border-slate-800 bg-slate-950/80 p-5 text-sm"
+                    className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 transition hover:border-slate-700"
                   >
-                    {/* Before */}
-                    <div className="flex items-start gap-3">
-                      <span className="rounded bg-red-950/80 px-2 py-0.5 text-[10px] font-bold text-red-400 border border-red-800/40">
-                        ORIGINAL (WEAK)
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Bullet #{idx + 1}
                       </span>
-                      <p className="text-xs text-slate-400 line-through decoration-red-400/50">
-                        {bullet.original}
-                      </p>
-                    </div>
-
-                    {/* After */}
-                    <div className="mt-3 flex items-start justify-between gap-3 rounded-lg bg-emerald-950/20 p-3.5 border border-emerald-500/20">
-                      <div className="space-y-1">
-                        <span className="rounded bg-emerald-950 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-800/50">
-                          AI UPGRADE (STAR METHOD)
-                        </span>
-                        <p className="text-xs font-medium text-emerald-200">
-                          {bullet.improved}
-                        </p>
-                        <p className="pt-1 text-[11px] text-slate-400 italic">
-                          💡 {bullet.critique}
-                        </p>
-                      </div>
-
                       <button
                         onClick={() => copyToClipboard(bullet.improved, idx)}
-                        className="shrink-0 flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 hover:border-cyan-400 hover:text-white"
-                        title="Copy improved bullet point"
+                        className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-300 transition hover:bg-slate-700 hover:text-white"
                       >
                         {copiedIndex === idx ? (
                           <>
-                            <Check className="h-3.5 w-3.5 text-emerald-400" />
+                            <Check className="h-3 w-3 text-emerald-400" />
                             <span className="text-emerald-400">Copied!</span>
                           </>
                         ) : (
                           <>
-                            <Copy className="h-3.5 w-3.5" />
-                            <span>Copy</span>
+                            <Copy className="h-3 w-3" />
+                            <span>Copy Upgraded</span>
                           </>
                         )}
                       </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <div className="text-[11px] font-semibold text-red-400/80 uppercase tracking-wide">
+                          Before (Original Phrasing)
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400 line-through decoration-red-500/40">
+                          {bullet.original}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3">
+                        <div className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wide">
+                          After (STAR Formatted with Metrics)
+                        </div>
+                        <p className="mt-1 text-xs font-medium text-emerald-200">
+                          {bullet.improved}
+                        </p>
+                      </div>
+
+                      <div className="text-[11px] text-slate-400">
+                        <span className="font-semibold text-slate-300">Recruiter Rationale: </span>
+                        {bullet.critique}
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Strengths & Red Flags Split */}
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Strengths */}
-              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-6">
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <CheckCircle2 className="h-5 w-5" />
-                  <h4 className="font-bold text-white">Demonstrated Strengths</h4>
-                </div>
-                <ul className="mt-4 space-y-2.5">
-                  {resumeData.strengths.map((s, i) => (
-                    <li key={i} className="flex items-start gap-2.5 text-xs text-slate-300">
-                      <span className="text-emerald-400">✓</span>
-                      <span>{s}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Critical Improvements */}
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-950/10 p-6">
-                <div className="flex items-center gap-2 text-amber-400">
-                  <AlertTriangle className="h-5 w-5" />
-                  <h4 className="font-bold text-white">Recommended Improvements</h4>
-                </div>
-                <ul className="mt-4 space-y-2.5">
-                  {resumeData.improvements.map((imp, i) => (
-                    <li key={i} className="flex items-start gap-2.5 text-xs text-slate-300">
-                      <span className="text-amber-400">!</span>
-                      <span>{imp}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
             {/* Detected Skills Taxonomy */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 sm:p-8">
-              <h3 className="text-lg font-bold">Detected Technical Skills Matrix</h3>
-              <p className="text-xs text-slate-400">
-                Extracted and indexed across engineering domains for recruiter keyword searches.
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 backdrop-blur-md sm:p-8">
+              <h3 className="text-lg font-bold">Extracted Skill Competencies</h3>
+              <p className="mt-1 text-xs text-slate-400">
+                Skills identified and mapped to technical taxonomies for ATS parsing.
               </p>
 
-              <div className="mt-6 space-y-4">
+              <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(resumeData.detected_skills).map(([category, skills]) => (
-                  <div key={category} className="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <span className="w-40 shrink-0 text-xs font-semibold text-slate-400">
+                  <div key={category} className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+                    <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
                       {category}
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
+                    </h4>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
                       {skills.map((skill) => (
                         <span
                           key={skill}
-                          className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1 text-xs font-medium text-cyan-300"
+                          className="rounded-md border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] font-medium text-slate-200"
                         >
                           {skill}
                         </span>
@@ -483,10 +524,45 @@ export default function ResumePage() {
               </div>
             </div>
 
-            {/* Next Steps Floating CTA Banner */}
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-cyan-500/40 bg-gradient-to-r from-slate-900 via-cyan-950/40 to-slate-900 p-6">
+            {/* Strengths & Improvements */}
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Strengths */}
+              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/10 p-6 backdrop-blur-sm sm:p-8">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                  <h4 className="font-bold text-white">Demonstrated Strengths</h4>
+                </div>
+                <ul className="mt-4 space-y-2.5 text-xs text-slate-300">
+                  {resumeData.strengths.map((str, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-emerald-400 font-bold">•</span>
+                      <span>{str}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Improvements */}
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-950/10 p-6 backdrop-blur-sm sm:p-8">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-400" />
+                  <h4 className="font-bold text-white">High-Priority Enhancements</h4>
+                </div>
+                <ul className="mt-4 space-y-2.5 text-xs text-slate-300">
+                  {resumeData.improvements.map((imp, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-amber-400 font-bold">•</span>
+                      <span>{imp}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Next Steps CTA */}
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900 via-cyan-950/30 to-slate-900 p-6 sm:p-8">
               <div>
-                <h4 className="text-lg font-bold">What would you like to do next?</h4>
+                <h4 className="font-bold text-white">Ready for the Next Step?</h4>
                 <p className="text-xs text-slate-300">
                   Your resume is saved in your session. Match it against real tech jobs or simulate a mock interview.
                 </p>
@@ -514,5 +590,13 @@ export default function ResumePage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function ResumePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 p-8 text-slate-400">Loading Resume Analyzer...</div>}>
+      <ResumePageContent />
+    </Suspense>
   );
 }

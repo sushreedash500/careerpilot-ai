@@ -58,7 +58,7 @@ export default function Home() {
           {/* Primary CTA Buttons */}
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Link
-              href="/resume"
+              href="/resume?upload=true"
               className="group flex items-center gap-2 rounded-xl bg-cyan-500 px-7 py-3.5 font-bold text-slate-950 shadow-lg shadow-cyan-500/25 transition-all hover:bg-cyan-400 hover:shadow-cyan-500/40 active:scale-95"
             >
               Analyze Your Resume
@@ -141,7 +141,7 @@ export default function Home() {
             </ul>
 
             <Link
-              href="/resume"
+              href="/resume?upload=true"
               className="mt-8 inline-flex items-center gap-1.5 text-sm font-semibold text-cyan-400 hover:text-cyan-300"
             >
               Test Analyzer <ArrowRight className="h-4 w-4" />

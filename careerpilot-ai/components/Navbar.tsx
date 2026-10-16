@@ -106,7 +106,7 @@ export default function Navbar() {
           )}
 
           <Link
-            href="/resume"
+            href="/resume?upload=true"
             className="rounded-xl bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 shadow-md shadow-cyan-500/25 transition-all hover:bg-cyan-400 active:scale-95"
           >
             Upload Resume
