@@ -6,7 +6,16 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
-    if (!file || !file.name.toLowerCase().endsWith(".pdf")) {
+    if (!file) {
+      return NextResponse.json({ detail: "Please upload a resume file." }, { status: 400 });
+    }
+
+    const isPdf =
+      file.name.toLowerCase().endsWith(".pdf") ||
+      file.type === "application/pdf" ||
+      file.type === "application/x-pdf";
+
+    if (!isPdf) {
       return NextResponse.json({ detail: "Please upload a valid PDF file." }, { status: 400 });
     }
 

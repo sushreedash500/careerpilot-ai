@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCareer } from "@/components/CareerContext";
@@ -99,14 +99,21 @@ function ResumePageContent() {
     }
   }, [searchParams, resumeData]);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const handleFile = (file: File) => {
     setErrorMessage("");
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
+    const isPdf =
+      file.name.toLowerCase().endsWith(".pdf") ||
+      file.type === "application/pdf" ||
+      file.type === "application/x-pdf";
+
+    if (!isPdf) {
       setErrorMessage("Please select a valid PDF file.");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setErrorMessage("Resume must be under 10 MB.");
+    if (file.size > 15 * 1024 * 1024) {
+      setErrorMessage("Resume must be under 15 MB.");
       return;
     }
     setSelectedFile(file);
@@ -122,7 +129,11 @@ function ResumePageContent() {
   };
 
   const analyzeFile = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile) {
+      setErrorMessage("Please choose your PDF resume file first.");
+      fileInputRef.current?.click();
+      return;
+    }
 
     setIsUploading(true);
     setErrorMessage("");
@@ -131,9 +142,12 @@ function ResumePageContent() {
     const formData = new FormData();
     formData.append("file", selectedFile);
 
+    let t1: any;
+    let t2: any;
+
     try {
-      setTimeout(() => setUploadStep("Running ATS scoring algorithms..."), 700);
-      setTimeout(() => setUploadStep("Synthesizing STAR bullet rewrites..."), 1400);
+      t1 = setTimeout(() => setUploadStep("Running ATS scoring algorithms..."), 700);
+      t2 = setTimeout(() => setUploadStep("Synthesizing STAR bullet rewrites..."), 1400);
 
       const res = await apiFetch("/analyze-resume", {
         method: "POST",
@@ -148,9 +162,12 @@ function ResumePageContent() {
       const data = await res.json();
       setResumeData(data);
       setActiveTab("report");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err: any) {
       setErrorMessage(err.message || "An error occurred during analysis.");
     } finally {
+      clearTimeout(t1);
+      clearTimeout(t2);
       setIsUploading(false);
       setUploadStep("");
     }
@@ -326,18 +343,35 @@ function ResumePageContent() {
             )}
 
             <div
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (!target.closest("button") && !target.closest("input")) {
+                  fileInputRef.current?.click();
+                }
+              }}
               onDragOver={(e) => {
                 e.preventDefault();
                 setIsDragging(true);
               }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
-              className={`relative rounded-3xl border-2 border-dashed p-8 text-center transition-all sm:p-12 ${
+              className={`relative rounded-3xl border-2 border-dashed p-8 text-center transition-all cursor-pointer sm:p-12 ${
                 isDragging
                   ? "border-cyan-400 bg-cyan-950/20"
+                  : selectedFile
+                  ? "border-emerald-500/50 bg-emerald-950/10"
                   : "border-slate-700 bg-slate-900/60 hover:border-slate-500"
               }`}
             >
+              <input
+                ref={fileInputRef}
+                id="resume-file-input"
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                className="hidden"
+              />
+
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-950/60 text-cyan-400 border border-cyan-800/40">
                 <UploadCloud className="h-8 w-8" />
               </div>
@@ -347,19 +381,17 @@ function ResumePageContent() {
               </h2>
 
               <p className="mt-2 text-xs text-slate-400">
-                Supports PyMuPDF & PDF.js text extraction · Maximum file size 10 MB
+                Tap anywhere or browse your device · Maximum file size 15 MB
               </p>
 
               <div className="mt-6 flex flex-wrap justify-center gap-3">
-                <label className="cursor-pointer rounded-xl bg-cyan-500 px-6 py-3 text-xs font-bold text-slate-950 transition hover:bg-cyan-400 active:scale-95">
-                  Browse Computer
-                  <input
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                    className="sr-only"
-                  />
-                </label>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded-xl bg-cyan-500 px-6 py-3 text-xs font-bold text-slate-950 transition hover:bg-cyan-400 active:scale-95"
+                >
+                  {selectedFile ? "Change PDF File" : "Browse Files"}
+                </button>
 
                 <button
                   type="button"
@@ -372,9 +404,20 @@ function ResumePageContent() {
               </div>
 
               {selectedFile && (
-                <div className="mt-6 flex items-center justify-center gap-2 text-xs font-medium text-emerald-400">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Ready to analyze: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+                <div className="mt-5 inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/40 px-4 py-2 text-xs font-medium text-emerald-300">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span>Ready to analyze: <strong>{selectedFile.name}</strong> ({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFile(null);
+                    }}
+                    className="ml-2 text-slate-400 hover:text-red-400 font-bold"
+                    title="Remove file"
+                  >
+                    ✕
+                  </button>
                 </div>
               )}
 
@@ -385,21 +428,33 @@ function ResumePageContent() {
                 </div>
               )}
 
-              {/* Upload Button */}
+              {/* Upload Button - Always reactive on tap */}
               <button
                 type="button"
-                disabled={!selectedFile || isUploading}
+                disabled={isUploading}
                 onClick={analyzeFile}
-                className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-500 py-4 font-bold text-slate-950 shadow-lg shadow-cyan-500/20 transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+                className={`mt-8 flex w-full items-center justify-center gap-2 rounded-xl py-4 font-bold text-slate-950 shadow-lg transition-all active:scale-[0.99] ${
+                  isUploading
+                    ? "bg-slate-700 text-slate-300 cursor-not-allowed opacity-70"
+                    : selectedFile
+                    ? "bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 shadow-emerald-500/20 hover:brightness-110"
+                    : "bg-gradient-to-r from-cyan-500 to-indigo-500 shadow-cyan-500/20 hover:brightness-110"
+                }`}
               >
                 {isUploading ? (
                   <>
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
                     <span>{uploadStep || "Analyzing Resume..."}</span>
                   </>
+                ) : selectedFile ? (
+                  <>
+                    <span>🚀 Run Deep ATS Analysis ({selectedFile.name})</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </>
                 ) : (
                   <>
-                    <span>Run Deep ATS Analysis</span>
+                    <UploadCloud className="h-4 w-4" />
+                    <span>Select PDF & Run Deep ATS Analysis</span>
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}
