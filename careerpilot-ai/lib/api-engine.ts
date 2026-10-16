@@ -1,4 +1,5 @@
 // Next.js Native Intelligence Engine for zero-dependency Vercel deployment
+import zlib from "zlib";
 
 export const SAMPLE_RESUME_TEXT = `
 ALEX CHEN
@@ -144,16 +145,131 @@ export const WEAK_PASSIVE_PHRASES = [
   "was involved in", "handled", "aided in", "contributed to", "duties included"
 ];
 
-export function extractContactInfo(text: string) {
+/**
+ * Robust in-memory PDF stream text and page extractor
+ * Decompresses FlateDecode zlib streams and decodes both literal and hex strings
+ */
+export function extractTextFromPdfBuffer(buffer: Buffer): { text: string; pages: number } {
+  let fullText = "";
+  let pageCount = 1;
+
+  const bufStr = buffer.toString("binary");
+  const countMatch = bufStr.match(/\/Count\s+(\d+)/);
+  if (countMatch && parseInt(countMatch[1]) > 0) {
+    pageCount = parseInt(countMatch[1]);
+  }
+
+  let sIdx = 0;
+  while ((sIdx = buffer.indexOf(Buffer.from("stream"), sIdx)) !== -1) {
+    let start = sIdx + 6;
+    if (buffer[start] === 0x0d) start++;
+    if (buffer[start] === 0x0a) start++;
+
+    const end = buffer.indexOf(Buffer.from("endstream"), start);
+    if (end === -1) break;
+
+    let chunk = buffer.subarray(start, end);
+    while (chunk.length && (chunk[chunk.length - 1] === 0x0d || chunk[chunk.length - 1] === 0x0a)) {
+      chunk = chunk.subarray(0, chunk.length - 1);
+    }
+
+    let decompressed: string | null = null;
+    try {
+      decompressed = zlib.inflateSync(chunk).toString("latin1");
+    } catch {
+      try {
+        decompressed = zlib.inflateRawSync(chunk).toString("latin1");
+      } catch {
+        decompressed = chunk.toString("latin1");
+      }
+    }
+
+    if (decompressed) {
+      // 1. Array strings: [ ... ] TJ
+      const tjBlocks = decompressed.match(/\[([\s\S]*?)\]\s*TJ/g) || [];
+      for (const block of tjBlocks) {
+        const items = block.match(/<([0-9a-fA-F]+)>|\(([^()]*)\)/g) || [];
+        for (const item of items) {
+          if (item.startsWith("<") && item.endsWith(">")) {
+            const hex = item.slice(1, -1);
+            fullText += Buffer.from(hex, "hex").toString("latin1") + " ";
+          } else if (item.startsWith("(") && item.endsWith(")")) {
+            fullText += item.slice(1, -1) + " ";
+          }
+        }
+        fullText += "\n";
+      }
+
+      // 2. Single strings: (string) Tj or <hex> Tj
+      const tjMatches = decompressed.match(/(?:<([0-9a-fA-F]+)>|\(([^()]*)\))\s*Tj/g) || [];
+      for (const item of tjMatches) {
+        const hexM = item.match(/<([0-9a-fA-F]+)>/);
+        const litM = item.match(/\(([^()]*)\)/);
+        if (hexM) {
+          fullText += Buffer.from(hexM[1], "hex").toString("latin1") + " ";
+        } else if (litM) {
+          fullText += litM[1] + " ";
+        }
+        fullText += "\n";
+      }
+
+      // 3. Text between BT and ET
+      if (tjBlocks.length === 0 && tjMatches.length === 0) {
+        const btBlocks = decompressed.match(/BT[\s\S]*?ET/g) || [];
+        for (const block of btBlocks) {
+          const rawItems = block.match(/<([0-9a-fA-F]+)>|\(([^()]*)\)/g) || [];
+          for (const item of rawItems) {
+            if (item.startsWith("<") && item.endsWith(">")) {
+              fullText += Buffer.from(item.slice(1, -1), "hex").toString("latin1") + " ";
+            } else if (item.startsWith("(") && item.endsWith(")")) {
+              fullText += item.slice(1, -1) + " ";
+            }
+          }
+          fullText += "\n";
+        }
+      }
+    }
+
+    sIdx = end + 9;
+  }
+
+  // Fallback: If no stream decoded or plain text PDF
+  if (!fullText.trim()) {
+    const rawMatches = bufStr.match(/\(([^()]{2,})\)/g) || [];
+    fullText = rawMatches.map(m => m.slice(1, -1)).join(" ");
+  }
+
+  return { text: fullText.trim(), pages: Math.max(1, pageCount) };
+}
+
+export function extractContactInfo(text: string, filename: string = "") {
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
   let name = "Candidate";
-  for (const line of lines.slice(0, 4)) {
+
+  const nonNameKeywords = [
+    "resume", "curriculum", "vitae", "summary", "contact", "experience",
+    "education", "skills", "projects", "developer", "engineer", "lead",
+    "manager", "student", "intern", "objective", "profile", "phone", "email", "@"
+  ];
+
+  for (const line of lines.slice(0, 8)) {
     const cleaned = line.replace(/[^a-zA-Z\s]/g, "").trim();
-    if (cleaned && cleaned.split(/\s+/).length >= 2 && cleaned.split(/\s+/).length <= 3) {
-      if (!["resume", "curriculum", "vitae", "summary", "contact"].some(k => cleaned.toLowerCase().includes(k))) {
-        name = cleaned;
+    const words = cleaned.split(/\s+/).filter(Boolean);
+    if (words.length >= 2 && words.length <= 4) {
+      const lower = cleaned.toLowerCase();
+      if (!nonNameKeywords.some(k => lower.includes(k))) {
+        name = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
         break;
       }
+    }
+  }
+
+  // If still generic, infer from filename e.g. "Sushree_Dash_Resume.pdf"
+  if (name === "Candidate" && filename) {
+    const cleanFile = filename.replace(/\.pdf$/i, "").replace(/[_-]/g, " ").trim();
+    const fileWords = cleanFile.split(/\s+/).filter(w => !nonNameKeywords.some(k => w.toLowerCase().includes(k)));
+    if (fileWords.length >= 2 && fileWords.length <= 3) {
+      name = fileWords.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
     }
   }
 
@@ -168,7 +284,7 @@ export function extractContactInfo(text: string) {
     email: emailMatch ? emailMatch[0] : null,
     phone: phoneMatch ? phoneMatch[0] : null,
     linkedin: linkedinMatch ? `linkedin.com/in/${linkedinMatch[1]}` : null,
-    github: githubMatch ? `github.com/` + githubMatch[1] : null,
+    github: githubMatch ? `github.com/${githubMatch[1]}` : null,
     portfolio: portfolioMatch ? portfolioMatch[1] : null,
     location: "Available"
   };
@@ -195,26 +311,49 @@ export function extractSkills(text: string) {
 
 export function analyzeResumeText(text: string, filename: string = "Resume.pdf", pages: number = 1) {
   const textLower = text.toLowerCase();
-  const contact = extractContactInfo(text);
+  const contact = extractContactInfo(text, filename);
   const detectedSkills = extractSkills(text);
 
+  // 1. Metric Impact Score (0-100)
   const metricHits = (text.match(/\d+%|\$\d+|\b\d{2,}\b|\d+x\b|\b\d+\+\b/g) || []).length;
   const impactScore = Math.min(100, Math.floor((metricHits / 6) * 100));
 
-  const strongVerbsCount = HIGH_IMPACT_VERBS.filter(v => new RegExp(`\\b${v}\\b`, 'i').test(textLower)).length;
-  const weakPhrasesCount = WEAK_PASSIVE_PHRASES.filter(p => textLower.includes(p)).length;
-  const actionVerbScore = Math.min(100, Math.max(20, (strongVerbsCount * 15) - (weakPhrasesCount * 10)));
+  // 2. Action Verb Score (0-100)
+  const strongVerbsFound = HIGH_IMPACT_VERBS.filter(v => new RegExp(`\\b${v}\\b`, 'i').test(textLower));
+  const weakPhrasesFound = WEAK_PASSIVE_PHRASES.filter(p => textLower.includes(p));
+  const actionVerbScore = Math.min(100, Math.max(25, (strongVerbsFound.length * 15) - (weakPhrasesFound.length * 10)));
 
+  // 3. Technical Keyword Score (0-100)
   const totalSkillsFound = Object.values(detectedSkills).reduce((acc, curr) => acc + curr.length, 0);
-  const keywordScore = Math.min(100, Math.floor((totalSkillsFound / 14) * 100));
+  const keywordScore = Math.min(100, Math.floor((totalSkillsFound / 12) * 100));
+
+  // 4. Structure & Completeness Score (0-100)
+  const expectedSections = {
+    "Summary / Objective": ["summary", "objective", "profile", "about me"],
+    "Experience / Work History": ["experience", "employment", "work history", "professional experience"],
+    "Skills": ["skills", "technical skills", "technologies", "competencies"],
+    "Projects": ["projects", "personal projects", "portfolio projects"],
+    "Education": ["education", "academic", "university", "degree", "bachelor", "master"]
+  };
+
+  const detectedSections: string[] = [];
+  const missingSections: string[] = [];
+
+  for (const [secName, keywords] of Object.entries(expectedSections)) {
+    if (keywords.some(k => new RegExp(`\\b${k}\\b`, 'i').test(textLower))) {
+      detectedSections.push(secName);
+    } else {
+      missingSections.push(secName);
+    }
+  }
 
   let structurePoints = 0;
   if (contact.email) structurePoints += 20;
   if (contact.phone) structurePoints += 15;
   if (contact.linkedin || contact.github) structurePoints += 15;
-  if (/experience|work history/i.test(textLower)) structurePoints += 25;
-  if (/skills/i.test(textLower)) structurePoints += 15;
-  if (/education/i.test(textLower)) structurePoints += 10;
+  if (detectedSections.includes("Experience / Work History")) structurePoints += 25;
+  if (detectedSections.includes("Skills")) structurePoints += 15;
+  if (detectedSections.includes("Education")) structurePoints += 10;
   const structureScore = Math.min(100, structurePoints);
 
   const overallAts = Math.round(
@@ -229,52 +368,102 @@ export function analyzeResumeText(text: string, filename: string = "Resume.pdf",
       category: "Measurable Impact & Metrics",
       score: impactScore,
       weight: 0.30,
-      status: impactScore >= 80 ? "excellent" : impactScore >= 60 ? "good" : "needs_improvement",
+      status: (impactScore >= 80 ? "excellent" : impactScore >= 60 ? "good" : "needs_improvement") as any,
       feedback: impactScore >= 70
-        ? `Found ${metricHits} quantifiable metrics. Recruiters and ATS algorithms prioritize quantifiable results.`
-        : `Only ${metricHits} metrics detected. Add quantifiable outcomes (e.g., 'reduced latency by 35%').`
+        ? `Found ${metricHits} quantifiable metrics. Recruiters and ATS bots heavily prioritize measurable outcomes.`
+        : `Only ${metricHits} metrics detected. Add quantifiable outcomes (e.g. 'reduced latency by 35%', 'handled 50k requests') to prove impact.`
     },
     {
       category: "Action Verbs & Leadership",
       score: actionVerbScore,
       weight: 0.25,
-      status: actionVerbScore >= 80 ? "excellent" : actionVerbScore >= 60 ? "good" : "needs_improvement",
+      status: (actionVerbScore >= 80 ? "excellent" : actionVerbScore >= 60 ? "good" : "needs_improvement") as any,
       feedback: actionVerbScore >= 70
-        ? `Strong active voice with ${strongVerbsCount} high-impact power verbs.`
-        : `Detected passive phrases (${weakPhrasesCount} instances). Replace with assertive verbs like 'Engineered' or 'Architected'.`
+        ? `Strong active voice with ${strongVerbsFound.length} high-impact power verbs.`
+        : `Detected passive language (${weakPhrasesFound.length} instances like 'worked on'). Replace them with assertive verbs like 'Engineered', 'Architected', or 'Automated'.`
     },
     {
       category: "Technical Keyword Depth",
       score: keywordScore,
       weight: 0.25,
-      status: keywordScore >= 80 ? "excellent" : keywordScore >= 60 ? "good" : "needs_improvement",
-      feedback: `Extracted ${totalSkillsFound} industry-standard technical competencies.`
+      status: (keywordScore >= 80 ? "excellent" : keywordScore >= 60 ? "good" : "needs_improvement") as any,
+      feedback: `Extracted ${totalSkillsFound} industry-standard technical competencies across modern engineering stacks.`
     },
     {
       category: "ATS Formatting & Completeness",
       score: structureScore,
       weight: 0.20,
-      status: structureScore >= 80 ? "excellent" : "good",
-      feedback: structureScore >= 80
+      status: (structureScore >= 80 ? "excellent" : "good") as any,
+      feedback: missingSections.length === 0
         ? "All critical resume sections and verified contact identifiers detected cleanly."
-        : "Enhance resume structure with dedicated skills, experience, and contact sections."
+        : `Consider adding missing standard sections: ${missingSections.join(", ")}.`
     }
   ];
 
-  const bulletImprovements = [
-    {
-      original: "Worked on customer dashboards and fixed backend bugs.",
-      improved: "Architected responsive analytics dashboard using React & Next.js, resolving 45+ critical Jira issues and accelerating data load times by 40%.",
-      critique: "Replaces passive 'worked on' with 'Architected' and provides concrete volume and percentage acceleration.",
-      framework: "STAR Method"
-    },
-    {
-      original: "Assisted team with database schema migrations in PostgreSQL.",
-      improved: "Engineered automated PostgreSQL database schema migration pipelines, reducing deployment schema lock downtime by 85%.",
-      critique: "Transitions from supporting role to engineering ownership with measurable downtime reduction.",
-      framework: "STAR Method"
+  // Dynamic Bullet Point Extraction from the actual user's resume!
+  const rawLines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  const bulletCandidates = rawLines.filter(l =>
+    (l.startsWith("•") || l.startsWith("-") || l.startsWith("*") || l.startsWith("·") || (l.length > 30 && /^[A-Z]/.test(l))) &&
+    !Object.values(expectedSections).flat().some(sec => l.toLowerCase() === sec)
+  );
+
+  const bulletImprovements: Array<{ original: string; improved: string; critique: string; framework: string }> = [];
+
+  for (const b of bulletCandidates) {
+    const cleanB = b.replace(/^[•\-\*\·\s]+/, "").trim();
+    const hasNum = /\d+/.test(cleanB);
+    const hasWeak = WEAK_PASSIVE_PHRASES.some(wp => cleanB.toLowerCase().includes(wp));
+
+    if ((!hasNum || hasWeak) && cleanB.length > 20 && cleanB.length < 200) {
+      let improved = cleanB;
+      if (hasWeak) {
+        for (const wp of WEAK_PASSIVE_PHRASES) {
+          improved = improved.replace(new RegExp(wp, "i"), "Engineered and delivered");
+        }
+      } else {
+        const firstWord = improved.split(/\s+/)[0];
+        improved = `Architected and deployed ${improved.slice(firstWord.length).trim()}`;
+      }
+
+      if (!hasNum) {
+        improved += ", achieving 35% performance improvement and reducing turnaround latency.";
+      }
+
+      bulletImprovements.push({
+        original: cleanB,
+        improved,
+        critique: "Replaces passive phrasing with proactive ownership verb and introduces measurable impact (STAR framework).",
+        framework: "STAR Method"
+      });
+
+      if (bulletImprovements.length >= 3) break;
     }
-  ];
+  }
+
+  // If user resume bullets are already quantified, show exemplary STAR improvement
+  if (bulletImprovements.length === 0) {
+    bulletImprovements.push({
+      original: bulletCandidates[0] ? bulletCandidates[0].replace(/^[•\-\*\·\s]+/, "") : "Developed web features and assisted team with API endpoints.",
+      improved: "Spearheaded end-to-end full-stack feature development and optimized RESTful APIs, reducing response times by 40% and serving 10,000+ active users.",
+      critique: "Upgrades task description into quantifiable STAR achievement with clear metrics and ownership verbs.",
+      framework: "STAR Method"
+    });
+  }
+
+  // Dynamic Strengths
+  const strengths: string[] = [];
+  if (impactScore >= 60) strengths.push(`Strong quantification: resume includes ${metricHits} data points demonstrating measurable impact.`);
+  if (actionVerbScore >= 60) strengths.push(`Assertive technical phrasing: features ${strongVerbsFound.length} power verbs highlighting ownership.`);
+  if (contact.linkedin && contact.github) strengths.push("Complete digital footprint: both LinkedIn and GitHub profiles identified.");
+  if (totalSkillsFound >= 6) strengths.push(`Extensive technical breadth spanning ${Object.keys(detectedSkills).length} engineering domains.`);
+  if (strengths.length === 0) strengths.push("Clean foundational format and clear technical skill section.");
+
+  // Dynamic Improvements
+  const improvements: string[] = [];
+  if (impactScore < 70) improvements.push("Quantify project outcomes: Add percentages, performance speedups, user metrics, or time saved to bullet points.");
+  if (weakPhrasesFound.length > 0) improvements.push(`Eliminate passive words: Replace phrases like '${weakPhrasesFound[0]}' with verbs like 'Architected' or 'Spearheaded'.`);
+  if (!contact.github) improvements.push("Add a direct GitHub repository link to highlight your coding commits and portfolio projects.");
+  if (missingSections.length > 0) improvements.push(`Incorporate missing resume sections: ${missingSections.join(", ")}.`);
 
   return {
     filename,
@@ -284,19 +473,12 @@ export function analyzeResumeText(text: string, filename: string = "Resume.pdf",
     ats_score: overallAts,
     score_breakdown: scoreBreakdown,
     detected_skills: detectedSkills,
-    detected_sections: ["Summary", "Experience", "Skills", "Education", "Projects"],
-    missing_sections: [],
-    strengths: [
-      `Quantifiable metrics: resume contains ${metricHits} measurable data points.`,
-      `Dynamic action verbs: features ${strongVerbsCount} high-impact leadership verbs.`,
-      `Professional online presence: contact links identified for direct recruiter review.`
-    ],
-    improvements: [
-      "Quantify remaining bullet points with concrete percentages, numbers, or time saved.",
-      "Highlight cloud deployment or microservices experience in project summaries."
-    ],
+    detected_sections: detectedSections,
+    missing_sections: missingSections,
+    strengths,
+    improvements,
     bullet_improvements: bulletImprovements,
-    summary_critique: "Strong technical candidate profile with high ATS keyword alignment and clear career progression.",
+    summary_critique: `Identified profile for ${contact.name}. Candidate demonstrates competencies in ${Object.values(detectedSkills).flat().slice(0, 5).join(", ") || "software engineering"}.`,
     engine_used: "CareerPilot Vercel Native Engine"
   };
 }

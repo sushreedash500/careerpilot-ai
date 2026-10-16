@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { analyzeResumeText, SAMPLE_RESUME_TEXT } from "@/lib/api-engine";
+import { analyzeResumeText, extractTextFromPdfBuffer } from "@/lib/api-engine";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,26 +13,17 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    let extractedText = "";
-    let pageCount = 1;
+    // Extract text using native in-memory stream extractor
+    const { text, pages } = extractTextFromPdfBuffer(buffer);
 
-    try {
-      const pdfParse = require("pdf-parse");
-      const data = await pdfParse(buffer);
-      extractedText = data.text || "";
-      pageCount = data.numpages || 1;
-    } catch (parseErr) {
-      // Fallback text decoding for streams
-      const rawString = buffer.toString("utf-8");
-      const textMatches = rawString.match(/\(([^()]+)\)[\s]*Tj/g) || [];
-      extractedText = textMatches.map(m => m.replace(/[()]/g, "").replace(/\s*Tj$/, "")).join(" ");
+    if (!text || text.trim().length < 10) {
+      return NextResponse.json(
+        { detail: "Could not extract text from this PDF. Please ensure your PDF has selectable text and is not an image-only scan." },
+        { status: 400 }
+      );
     }
 
-    if (!extractedText.trim()) {
-      extractedText = SAMPLE_RESUME_TEXT;
-    }
-
-    const analysis = analyzeResumeText(extractedText, file.name, pageCount);
+    const analysis = analyzeResumeText(text, file.name, pages);
     return NextResponse.json(analysis);
   } catch (error: any) {
     return NextResponse.json({ detail: error.message || "Failed to analyze resume" }, { status: 500 });
