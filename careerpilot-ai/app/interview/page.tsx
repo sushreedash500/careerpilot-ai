@@ -38,6 +38,12 @@ export default function InterviewPage() {
   const [evaluationResult, setEvaluationResult] = useState<any | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
+  const handleLoadDemo = async () => {
+    setQuestions([]);
+    setEvaluationResult(null);
+    await loadDemoProfile();
+  };
+
   const sampleAnswerText =
     "In my previous role at NexaTech, our main API was suffering from high latency during peak morning loads. I was tasked with diagnosing the bottleneck and bringing response times under 500ms before our customer launch. I profiled the FastAPI endpoints using APM tools, identified redundant N+1 PostgreSQL queries, implemented Redis caching with a 10-minute TTL, and added B-tree indexes on foreign keys. As a result, peak query latency dropped by 65% (from 1.8s down to 250ms), allowing the application to serve 120,000+ monthly users with 99.9% uptime.";
 
@@ -139,7 +145,7 @@ export default function InterviewPage() {
 
           {!resumeData && (
             <button
-              onClick={loadDemoProfile}
+              onClick={handleLoadDemo}
               disabled={isLoadingDemo}
               className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/40 px-4 py-2.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-900/60 disabled:opacity-50"
             >
@@ -161,7 +167,7 @@ export default function InterviewPage() {
                 </div>
               </div>
               <button
-                onClick={loadDemoProfile}
+                onClick={handleLoadDemo}
                 className="rounded-lg bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-amber-400"
               >
                 Use Demo Resume

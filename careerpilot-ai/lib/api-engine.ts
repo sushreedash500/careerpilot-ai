@@ -242,16 +242,24 @@ export function extractContactInfo(text: string, filename: string = "") {
     }
   }
 
-  // Location: e.g. "G.Udayagiri, Kandhamal, Odisha, India | Pin - 762100"
+  // Location: e.g. "San Francisco, CA" or "G.Udayagiri, Kandhamal, Odisha, India"
   let location = "Available";
   for (const line of lines.slice(0, 10)) {
-    if (line.includes(",") && !line.includes("@") && !/https?:|github|linkedin|phone/i.test(line)) {
-      const cleanedLoc = line.split("|")[0].replace(/Pin\s*[-:]?\s*\d+/i, "").trim();
-      if (cleanedLoc.length >= 4 && cleanedLoc.length <= 80) {
-        location = cleanedLoc;
-        break;
+    const parts = line.split("|").map(p => p.trim());
+    for (const part of parts) {
+      if (
+        part.includes(",") &&
+        !part.includes("@") &&
+        !/phone|email|languages|skills|summary|projects|education|experience|b\.tech|http/i.test(part)
+      ) {
+        const cleanedLoc = part.replace(/Pin\s*[-:]?\s*\d+/i, "").trim();
+        if (cleanedLoc.length >= 4 && cleanedLoc.length <= 60) {
+          location = cleanedLoc;
+          break;
+        }
       }
     }
+    if (location !== "Available") break;
   }
 
   // Email

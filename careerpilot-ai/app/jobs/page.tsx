@@ -90,6 +90,11 @@ export default function JobsPage() {
     }
   };
 
+  const handleLoadDemo = async () => {
+    setMatchResult(null);
+    await loadDemoProfile();
+  };
+
   // Automatically trigger match when demo resume or sample job changes if resume is present
   useEffect(() => {
     if (resumeData && sampleJobs.length > 0 && !matchResult) {
@@ -117,7 +122,7 @@ export default function JobsPage() {
 
           {!resumeData && (
             <button
-              onClick={loadDemoProfile}
+              onClick={handleLoadDemo}
               disabled={isLoadingDemo}
               className="flex items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-950/40 px-4 py-2.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-900/60 disabled:opacity-50"
             >
@@ -140,7 +145,7 @@ export default function JobsPage() {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={loadDemoProfile}
+                  onClick={handleLoadDemo}
                   className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-amber-400"
                 >
                   Load Demo

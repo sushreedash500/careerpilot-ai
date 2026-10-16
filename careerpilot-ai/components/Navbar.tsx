@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCareer } from "./CareerContext";
 import {
   FileText,
@@ -18,8 +18,16 @@ import { useState } from "react";
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { resumeData, loadDemoProfile, isLoadingDemo, clearData } = useCareer();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleNavDemo = async () => {
+    await loadDemoProfile();
+    if (pathname !== "/resume" && pathname !== "/jobs" && pathname !== "/interview") {
+      router.push("/resume");
+    }
+  };
 
   const navItems = [
     { label: "Resume Analyzer", href: "/resume", icon: FileText },
@@ -88,7 +96,7 @@ export default function Navbar() {
             </div>
           ) : (
             <button
-              onClick={loadDemoProfile}
+              onClick={handleNavDemo}
               disabled={isLoadingDemo}
               className="flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-gradient-to-r from-cyan-950/60 to-slate-900 px-3.5 py-2 text-xs font-semibold text-cyan-300 shadow-sm transition-all hover:border-cyan-400 hover:bg-cyan-900/40 disabled:opacity-50"
             >
@@ -150,8 +158,8 @@ export default function Navbar() {
                 </div>
               ) : (
                 <button
-                  onClick={() => {
-                    loadDemoProfile();
+                  onClick={async () => {
+                    await handleNavDemo();
                     setMobileMenuOpen(false);
                   }}
                   className="w-full rounded-xl border border-cyan-500/40 bg-slate-900 py-2.5 text-xs font-semibold text-cyan-300"

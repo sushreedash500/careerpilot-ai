@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { DEMO_RESUME_DATA } from "@/lib/demo-resume-data";
 
 export interface ContactInfo {
   name?: string;
@@ -107,13 +108,16 @@ export function CareerProvider({ children }: { children: React.ReactNode }) {
 
   const loadDemoProfile = async () => {
     setIsLoadingDemo(true);
+    // Instant local set for 0ms UI responsiveness
+    setResumeData(DEMO_RESUME_DATA);
     try {
       const res = await smartApiFetch("/sample-resume");
-      if (!res.ok) throw new Error("Failed to load sample resume");
-      const data: ResumeAnalysis = await res.json();
-      setResumeData(data);
+      if (res.ok) {
+        const data: ResumeAnalysis = await res.json();
+        setResumeData(data);
+      }
     } catch (err) {
-      console.error("Error loading demo profile:", err);
+      console.warn("Using instant demo profile fallback:", err);
     } finally {
       setIsLoadingDemo(false);
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCareer } from "@/components/CareerContext";
 import {
   FileText,
@@ -18,7 +19,13 @@ import {
 } from "lucide-react";
 
 export default function Home() {
+  const router = useRouter();
   const { loadDemoProfile, isLoadingDemo } = useCareer();
+
+  const handleDemoClick = async () => {
+    await loadDemoProfile();
+    router.push("/resume");
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 text-white selection:bg-cyan-500 selection:text-slate-950">
@@ -59,7 +66,7 @@ export default function Home() {
             </Link>
 
             <button
-              onClick={loadDemoProfile}
+              onClick={handleDemoClick}
               disabled={isLoadingDemo}
               className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/90 px-6 py-3.5 font-semibold text-slate-200 transition-all hover:border-cyan-500/50 hover:bg-slate-800 disabled:opacity-50"
             >
@@ -278,7 +285,7 @@ export default function Home() {
           </p>
           <div className="mt-8 flex justify-center">
             <button
-              onClick={loadDemoProfile}
+              onClick={handleDemoClick}
               disabled={isLoadingDemo}
               className="flex items-center gap-2 rounded-xl bg-cyan-500 px-8 py-4 font-bold text-slate-950 shadow-lg shadow-cyan-500/30 transition-all hover:bg-cyan-400 active:scale-95"
             >
