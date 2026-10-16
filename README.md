@@ -1,5 +1,6 @@
 # 🧭 CareerPilot AI — Next-Gen AI Career Assistant & ATS Recruiter Platform
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-careerpilot--ai--neon--eight.vercel.app-00df8f?style=for-the-badge&logo=vercel)](https://careerpilot-ai-neon-eight.vercel.app)
 [![Next.js](https://img.shields.io/badge/Next.js-16.4-black?style=flat&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.3-blue?style=flat&logo=react)](https://react.dev/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
@@ -9,6 +10,8 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+> 🚀 **Live Production Application**: **[https://careerpilot-ai-neon-eight.vercel.app](https://careerpilot-ai-neon-eight.vercel.app)**
+>
 > **CareerPilot AI** is a production-grade full-stack career platform designed to help candidates optimize tech resumes for Applicant Tracking Systems (ATS), bridge skill gaps for target job descriptions, and master behavioral and technical interviews with AI coaching.
 
 ---
