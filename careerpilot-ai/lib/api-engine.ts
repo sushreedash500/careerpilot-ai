@@ -684,3 +684,142 @@ Action: I designed and trained a Convolutional Neural Network on 5000+ augmented
 Result: The model achieved 92% recognition accuracy and ran smoothly at 30 FPS in real-time, meeting all deployment benchmarks.`
   };
 }
+
+export function generateCoverLetterEngine(
+  candidateName: string,
+  candidateEmail: string,
+  candidatePhone: string,
+  candidateLocation: string,
+  jobTitle: string,
+  company: string,
+  jobDescription: string,
+  matchedSkills: string[],
+  resumeText: string
+) {
+  const topSkills = matchedSkills && matchedSkills.length > 0
+    ? matchedSkills.slice(0, 4).join(", ")
+    : "Machine Learning, Python, and Full-Stack Engineering";
+
+  let projectHighlight = "architecting high-impact software systems, optimizing algorithms, and collaborating in fast-paced technical environments";
+  if (/crack detection/i.test(resumeText)) {
+    projectHighlight = "developing a real-time Computer Vision Crack Detection System and Hand Gesture Recognition pipeline with 92% accuracy using OpenCV and TensorFlow";
+  } else if (/nexatech|microservice|portal/i.test(resumeText)) {
+    projectHighlight = "spearheading migration to Next.js microservices, cutting query latency by 65%, and building scalable data ingestion pipelines";
+  }
+
+  const currentDate = new Date().toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+
+  const letterText = `${candidateName || "Candidate"}
+${candidateLocation || "Available"} | ${candidatePhone || ""} | ${candidateEmail || ""}
+
+${currentDate}
+
+Hiring Team
+${company || "Engineering Department"}
+
+RE: Application for ${jobTitle || "Engineering Position"}
+
+Dear Hiring Manager,
+
+I am writing to express my strong enthusiasm for the ${jobTitle || "Engineering Position"} role at ${company || "your organization"}. With hands-on expertise in ${topSkills}, combined with a proven track record of ${projectHighlight}, I am confident in my ability to make an immediate, meaningful impact on your technical initiatives.
+
+Throughout my technical projects and internships, I have consistently prioritized writing robust, production-grade code, designing efficient data structures, and delivering measurable results. My background includes:
+• Implementing high-performance architectures and algorithms utilizing ${topSkills}.
+• Developing end-to-end applications from data preprocessing and modeling to real-time deployment and testing.
+• Collaborating cross-functionally to transform product requirements into scalable, reliable technical solutions.
+
+What particularly excites me about joining ${company || "your team"} is your commitment to technical innovation. The challenges outlined in your job description closely align with my core engineering passions and hands-on skill set. I am eager to bring my problem-solving mindset and dedication to high code quality to help accelerate your team's roadmap.
+
+Thank you for your time and consideration. I welcome the opportunity to discuss how my technical experience, adaptability, and drive will contribute to the ongoing success of ${company || "your engineering organization"}.
+
+Sincerely,
+
+${candidateName || "Candidate"}
+`;
+
+  return {
+    candidate_name: candidateName || "Candidate",
+    job_title: jobTitle || "Target Role",
+    company: company || "Target Company",
+    cover_letter: letterText.trim()
+  };
+}
+
+export function optimizeBulletEngine(rawBullet: string) {
+  const clean = rawBullet.replace(/^[•\-\*\·\s]+/, "").trim();
+  if (!clean) {
+    return {
+      original: rawBullet,
+      score: 40,
+      verb_strength: "Weak",
+      quantification_status: "Missing Metrics",
+      variations: []
+    };
+  }
+
+  const lower = clean.toLowerCase();
+  const hasNumbers = /\d+/.test(clean);
+  const weakFound = WEAK_PASSIVE_PHRASES.find(wp => lower.includes(wp));
+  const strongFound = HIGH_IMPACT_VERBS.find(sv => new RegExp(`\\b${sv}\\b`, "i").test(clean));
+
+  let score = 50;
+  if (hasNumbers) score += 25;
+  if (strongFound) score += 25;
+  if (weakFound) score -= 20;
+  score = Math.min(100, Math.max(30, score));
+
+  const isML = /model|accuracy|learning|vision|opencv|tensor|nlp|dataset|ai|training/i.test(lower);
+  const isWeb = /api|backend|frontend|react|next|database|postgres|server|cloud|service|ui/i.test(lower);
+
+  let v1 = clean;
+  if (weakFound) {
+    v1 = v1.replace(new RegExp(weakFound, "i"), "Spearheaded and engineered");
+  } else if (!strongFound) {
+    v1 = `Architected and developed ${v1.charAt(0).toLowerCase() + v1.slice(1)}`;
+  }
+  if (!hasNumbers) {
+    if (isML) {
+      v1 += ", boosting benchmark model accuracy to 94% and reducing inference latency by 35%.";
+    } else if (isWeb) {
+      v1 += ", decreasing server query latency by 45% and serving 50,000+ daily active users with 99.9% uptime.";
+    } else {
+      v1 += ", achieving a 40% performance gain and reducing processing turnaround time by 30%.";
+    }
+  }
+
+  const v2 = isML
+    ? `Architected end-to-end ${clean.replace(/^(developed|worked on|implemented|learned|built)/i, "").trim()}, optimizing data pipelines across 10,000+ samples with automated validation.`
+    : `Engineered modular, production-grade architecture for ${clean.replace(/^(developed|worked on|implemented|learned|built)/i, "").trim()}, implementing automated CI/CD workflows and 90%+ unit test coverage.`;
+
+  const v3 = isML
+    ? `Pioneered implementation of ${clean.replace(/^(developed|worked on|implemented|learned|built)/i, "").trim()}, presenting key metric visualizations to stakeholders and cutting turnaround delivery cycles by 3 weeks.`
+    : `Spearheaded cross-functional delivery of ${clean.replace(/^(developed|worked on|implemented|learned|built)/i, "").trim()}, eliminating 30+ critical edge-case bugs and improving end-to-end system reliability.`;
+
+  return {
+    original: clean,
+    score,
+    verb_strength: strongFound ? "Strong Power Verb" : weakFound ? "Weak / Passive Verb" : "Neutral Action Verb",
+    quantification_status: hasNumbers ? "Quantified with Real Metrics" : "Lacks Quantifiable Numbers",
+    variations: [
+      {
+        type: "STAR Metric Focus (Recruiter Favorite)",
+        bullet: v1,
+        highlight: "Injects quantifiable percentage metrics and latency reductions using the STAR framework."
+      },
+      {
+        type: "Architecture & Scale Focus",
+        bullet: v2,
+        highlight: "Highlights production engineering, pipeline optimization, and code quality rigor."
+      },
+      {
+        type: "Ownership & Business Impact Focus",
+        bullet: v3,
+        highlight: "Emphasizes leadership, stakeholder communication, and delivery speed."
+      }
+    ]
+  };
+}

@@ -16,6 +16,11 @@ import {
   Award,
   Bot,
   Lightbulb,
+  Copy,
+  Check,
+  Download,
+  FileText,
+  RotateCcw,
 } from "lucide-react";
 
 interface SampleJob {
@@ -37,6 +42,73 @@ export default function JobsPage() {
   const [isMatching, setIsMatching] = useState(false);
   const [matchResult, setMatchResult] = useState<any | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [coverLetter, setCoverLetter] = useState<string>("");
+  const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
+  const [letterCopied, setLetterCopied] = useState(false);
+  const [letterError, setLetterError] = useState("");
+
+  const handleGenerateCoverLetter = async () => {
+    if (!resumeData) {
+      setErrorMessage("Please upload a resume or load the demo profile first.");
+      return;
+    }
+    setIsGeneratingLetter(true);
+    setLetterError("");
+    try {
+      const title = activeTab === "curated" ? activeJob?.title || "Target Role" : customTitle || "Target Role";
+      const company = activeTab === "curated" ? activeJob?.company || "Target Company" : "Target Company";
+      const description = activeTab === "curated" ? activeJob?.description || "" : customDescription;
+      const matched = matchResult?.skills_analysis?.matched_skills || [];
+
+      const res = await apiFetch("/generate-cover-letter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidate_name: resumeData.contact_info?.name || "",
+          candidate_email: resumeData.contact_info?.email || "",
+          candidate_phone: resumeData.contact_info?.phone || "",
+          candidate_location: resumeData.contact_info?.location || "",
+          job_title: title,
+          company: company,
+          job_description: description,
+          matched_skills: matched,
+          resume_text: resumeData.extracted_text || "",
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to generate cover letter.");
+      }
+
+      const data = await res.json();
+      setCoverLetter(data.cover_letter);
+    } catch (err: any) {
+      setLetterError(err.message || "Failed to generate cover letter.");
+    } finally {
+      setIsGeneratingLetter(false);
+    }
+  };
+
+  const handleCopyLetter = () => {
+    if (!coverLetter) return;
+    navigator.clipboard.writeText(coverLetter);
+    setLetterCopied(true);
+    setTimeout(() => setLetterCopied(false), 2000);
+  };
+
+  const handleDownloadLetter = () => {
+    if (!coverLetter) return;
+    const title = (matchResult?.job_title || activeJob?.title || "Target_Role").replace(/[^a-z0-9]/gi, "_");
+    const blob = new Blob([coverLetter], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title}_Cover_Letter.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Fetch sample jobs from backend
   useEffect(() => {
@@ -427,6 +499,132 @@ export default function JobsPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* AI Cover Letter Generator */}
+                <div className="rounded-2xl border border-indigo-500/30 bg-slate-900/80 p-6 sm:p-8 backdrop-blur-md">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400 uppercase tracking-widest">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        <span>AI Executive Application Kit</span>
+                      </div>
+                      <h4 className="mt-1 text-lg font-bold">
+                        Role-Tailored AI Cover Letter Generator
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        Synthesizes a high-conversion, ATS-optimized cover letter specifically tailored to {matchResult.job_title} highlighting your verified project impact.
+                      </p>
+                    </div>
+
+                    {!coverLetter && (
+                      <button
+                        onClick={handleGenerateCoverLetter}
+                        disabled={isGeneratingLetter}
+                        className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 px-5 py-2.5 text-xs font-bold text-slate-950 shadow-md shadow-indigo-500/20 transition-all hover:brightness-110 disabled:opacity-50"
+                      >
+                        {isGeneratingLetter ? (
+                          <>
+                            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
+                            <span>Generating Letter...</span>
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="h-4 w-4" />
+                            <span>⚡ Generate Tailored Cover Letter</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {letterError && (
+                    <div className="mt-4 rounded-xl border border-red-500/30 bg-red-950/20 p-3 text-xs text-red-300">
+                      {letterError}
+                    </div>
+                  )}
+
+                  {coverLetter ? (
+                    <div className="mt-6 space-y-4">
+                      {/* Action Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                          <span className="font-semibold text-white">
+                            {coverLetter.split(/\s+/).filter(Boolean).length} words
+                          </span>
+                          <span>·</span>
+                          <span className="text-emerald-400 font-medium">✓ Tailored to {matchResult.job_title}</span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={handleCopyLetter}
+                            className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700 hover:text-white"
+                          >
+                            {letterCopied ? (
+                              <>
+                                <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                <span className="text-emerald-400 font-bold">Copied to Clipboard!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3.5 w-3.5" />
+                                <span>Copy Text</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={handleDownloadLetter}
+                            className="flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/50 px-3 py-1.5 text-xs font-medium text-indigo-300 transition hover:bg-indigo-900/60"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            <span>Download (.txt)</span>
+                          </button>
+
+                          <button
+                            onClick={handleGenerateCoverLetter}
+                            disabled={isGeneratingLetter}
+                            className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-400 transition hover:text-white"
+                            title="Regenerate"
+                          >
+                            <RotateCcw className={`h-3 w-3 ${isGeneratingLetter ? "animate-spin" : ""}`} />
+                            <span>Regenerate</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Editable Textarea */}
+                      <div className="relative">
+                        <textarea
+                          rows={14}
+                          value={coverLetter}
+                          onChange={(e) => setCoverLetter(e.target.value)}
+                          className="w-full rounded-xl border border-slate-800 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        💡 <span className="font-semibold text-slate-300">Editable Studio:</span> You can refine, tweak, or personalize any paragraph directly in the box above before copying or submitting.
+                      </p>
+                    </div>
+                  ) : (
+                    !isGeneratingLetter && (
+                      <div className="mt-4 rounded-xl border border-dashed border-slate-800 bg-slate-950/40 p-5 text-center">
+                        <p className="text-xs text-slate-400">
+                          Click <strong className="text-indigo-300">"Generate Tailored Cover Letter"</strong> to create a personalized pitch highlighting your {matchResult.skills_analysis.matched_skills.slice(0, 3).join(", ")} experience.
+                        </p>
+                      </div>
+                    )
+                  )}
+
+                  {isGeneratingLetter && (
+                    <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-8 text-center">
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+                      <p className="mt-3 text-xs font-medium text-indigo-200">
+                        Synthesizing role-aligned cover letter with STAR project achievements...
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Practice Interview CTA */}
