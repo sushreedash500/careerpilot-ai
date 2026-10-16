@@ -16,7 +16,7 @@ from schemas import (
 # Curated Technical & Professional Skills Taxonomy
 SKILL_TAXONOMY = {
     "Languages": [
-        "python", "javascript", "typescript", "java", "c++", "c#", "go", "golang",
+        "python", "javascript", "typescript", "java", "c", "c++", "c#", "go", "golang",
         "rust", "ruby", "php", "swift", "kotlin", "sql", "html", "html5", "css", "css3"
     ],
     "Frontend": [
@@ -40,11 +40,13 @@ SKILL_TAXONOMY = {
     ],
     "AI, ML & Data": [
         "machine learning", "deep learning", "nlp", "llm", "large language models",
-        "openai", "gemini", "langchain", "llamaindex", "hugging face", "pytorch",
-        "tensorflow", "pandas", "numpy", "scikit-learn", "vector database", "rag",
-        "pymupdf", "embeddings"
+        "opencv", "computer vision", "image processing", "cnn", "openai", "gemini",
+        "langchain", "llamaindex", "hugging face", "pytorch", "tensorflow", "pandas",
+        "numpy", "scikit-learn", "matplotlib", "vector database", "rag", "pymupdf",
+        "tokenisation", "stemming", "lemmatisation", "data analysis", "feature engineering"
     ],
     "Testing & Tools": [
+        "jupyter notebook", "jupyter", "google colab", "colab", "vs code", "pycharm",
         "pytest", "jest", "cypress", "playwright", "vitest", "postman",
         "swagger", "jira", "agile", "scrum", "unit testing", "integration testing"
     ]
@@ -92,12 +94,17 @@ def extract_contact_info(text: str) -> ContactInfo:
     github = f"github.com/{github_match.group(1)}" if github_match else None
 
     # Portfolio / Website
-    portfolio_match = re.search(r'(?:https?://)?([a-zA-Z0-9_-]+\.(?:io|dev|me|tech|app))', text, re.IGNORECASE)
+    portfolio_match = re.search(r'https?://(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?)|(?<=\s|^)([a-zA-Z0-9-]+\.(?:io|dev|me|app))\b', text, re.IGNORECASE)
     portfolio = portfolio_match.group(1) if portfolio_match else None
 
     # Location heuristic
-    loc_match = re.search(r'([A-Za-z\s]+,\s*(?:[A-Z]{2}|[A-Za-z]+))', text[:400])
-    location = loc_match.group(1).strip() if loc_match else "Available"
+    location = "Available"
+    for line in lines[:10]:
+        if "," in line and "@" not in line and not re.search(r'https?:|github|linkedin|phone', line, re.I):
+            cleaned_loc = re.sub(r'Pin\s*[-:]?\s*\d+', '', line.split("|")[0]).strip()
+            if 4 <= len(cleaned_loc) <= 80:
+                location = cleaned_loc
+                break
 
     return ContactInfo(
         name=name,
@@ -155,6 +162,19 @@ def extract_skills_from_text(text: str) -> Dict[str, List[str]]:
 
 def evaluate_resume_heuristics(text: str, filename: str, pages: int) -> ResumeAnalysisResponse:
     """Calculates granular ATS readiness scores, critiques bullets, and suggests STAR rewrites."""
+    text = (
+        text
+        .replace("\u019f", "ti")
+        .replace("Ɵ", "ti")
+        .replace("\u01b2", "tt")
+        .replace("Ʃ", "tt")
+        .replace("\u014c", "ft")
+        .replace("Ō", "ft")
+        .replace("ﬁ", "fi")
+        .replace("ﬂ", "fl")
+        .replace("–", "-")
+        .replace("—", "-")
+    )
     text_lower = text.lower()
     contact = extract_contact_info(text)
     detected_sections, missing_sections = detect_sections(text)
@@ -268,9 +288,15 @@ def evaluate_resume_heuristics(text: str, filename: str, pages: int) -> ResumeAn
     raw_lines = [l.strip() for l in text.split("\n") if l.strip()]
     bullet_candidates = [
         l for l in raw_lines
-        if (l.startswith("•") or l.startswith("-") or l.startswith("*") or (len(l) > 35 and l[0].isupper()))
-        and not any(sec in l.lower() for sec in ["experience", "education", "skills", "summary"])
+        if (l.startswith("•") or l.startswith("-") or l.startswith("*") or l.startswith("·"))
+        and not any(sec in l.lower() for sec in ["experience", "education", "skills", "summary", "objective"])
     ]
+    if not bullet_candidates:
+        bullet_candidates = [
+            l for l in raw_lines
+            if len(l) > 35 and l[0].isupper()
+            and not any(sec in l.lower() for sec in ["experience", "education", "skills", "summary", "objective"])
+        ]
 
     # Identify weaker bullets (lacking numbers or containing weak verbs)
     for b in bullet_candidates:

@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Extract text using native in-memory stream extractor
-    const { text, pages } = extractTextFromPdfBuffer(buffer);
+    const { text, pages } = await extractTextFromPdfBuffer(buffer);
 
     if (!text || text.trim().length < 10) {
       return NextResponse.json(

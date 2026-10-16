@@ -77,6 +77,19 @@ async def analyze_resume(file: UploadFile = File(...)):
         with pymupdf.open(stream=pdf_bytes, filetype="pdf") as pdf:
             page_count = len(pdf)
             extracted_text = "\n".join(page.get_text() for page in pdf)
+            extracted_text = (
+                extracted_text
+                .replace("\u019f", "ti")
+                .replace("Ɵ", "ti")
+                .replace("\u01b2", "tt")
+                .replace("Ʃ", "tt")
+                .replace("\u014c", "ft")
+                .replace("Ō", "ft")
+                .replace("ﬁ", "fi")
+                .replace("ﬂ", "fl")
+                .replace("–", "-")
+                .replace("—", "-")
+            )
     except Exception as e:
         raise HTTPException(
             status_code=400,

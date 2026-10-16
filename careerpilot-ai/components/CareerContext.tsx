@@ -67,31 +67,13 @@ export const DEFAULT_API_BASE =
 export async function smartApiFetch(endpoint: string, options?: RequestInit): Promise<Response> {
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
-  // If NEXT_PUBLIC_API_URL is explicitly set, use it
+  // If NEXT_PUBLIC_API_URL is explicitly configured, use it
   if (process.env.NEXT_PUBLIC_API_URL) {
     const fullUrl = `${process.env.NEXT_PUBLIC_API_URL}${cleanEndpoint}`;
     return fetch(fullUrl, options);
   }
 
-  // If in browser on localhost, try FastAPI first with fallback to Next.js /api
-  if (
-    typeof window !== "undefined" &&
-    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-  ) {
-    try {
-      const fastApiUrl = `http://127.0.0.1:8000${cleanEndpoint}`;
-      const res = await fetch(fastApiUrl, options);
-      if (res.ok) return res;
-      // If 404 or server error, fallback to Next.js route
-      console.warn(`FastAPI returned status ${res.status}. Falling back to internal Next.js route.`);
-      return await fetch(`/api${cleanEndpoint}`, options);
-    } catch (networkErr) {
-      // Local FastAPI server is not running, seamlessly fallback to internal Next.js route
-      return await fetch(`/api${cleanEndpoint}`, options);
-    }
-  }
-
-  // In production (Vercel) without external URL, use Next.js internal routes
+  // Next.js API routes are always available both locally and on Vercel
   return fetch(`/api${cleanEndpoint}`, options);
 }
 
